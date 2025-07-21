@@ -12,20 +12,37 @@
 // You likely need two semaphores to do this correctly, and some
 // other integers to track things.
 
-typedef struct __barrier_t {
-    // add semaphores and other information here
-} barrier_t;
 
+typedef struct __barrier_t {
+  volatile int thread;
+  int thread_count;
+  sem_t lock;
+  sem_t release;
+} barrier_t;
 
 // the single barrier we are using for this program
 barrier_t b;
 
 void barrier_init(barrier_t *b, int num_threads) {
-    // initialization code goes here
+  b->thread_count = num_threads;
+  sem_init(&b->lock, 0, 1);
+  sem_init(&b->release,  0, 0);
 }
 
+int sval;
+
 void barrier(barrier_t *b) {
-    // barrier code goes here
+  // Not sure if we can do this without a lock
+  sem_wait(&b->lock); // use as lock, to update thread
+
+  if (++b->thread == b->thread_count) { // update shared variable
+    sem_post(&b->lock);
+    for (int i = 0; i < b->thread_count; i++)
+      sem_post(&b->release); // post exits for all threads
+  } else
+    sem_post(&b->lock);
+
+  sem_wait(&b->release);
 }
 
 //

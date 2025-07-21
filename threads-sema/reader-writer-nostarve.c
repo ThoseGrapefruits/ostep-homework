@@ -8,22 +8,48 @@
 //
 
 typedef struct __rwlock_t {
+  int   rcount;
+  sem_t lock;
+  sem_t writelock;
+  sem_t writewaitlock;
 } rwlock_t;
 
 
 void rwlock_init(rwlock_t *rw) {
+  sem_init(&rw->lock, 0, 1);
+  sem_init(&rw->writelock, 0, 1);
+  sem_init(&rw->writewaitlock, 0, 1);
 }
 
 void rwlock_acquire_readlock(rwlock_t *rw) {
+  sem_wait(&rw->writewaitlock);
+  sem_wait(&rw->lock);
+  sem_post(&rw->writewaitlock);
+  int count = ++rw->rcount;
+
+  if (count == 1)
+    sem_wait(&rw->writelock);
+
+  sem_post(&rw->lock);
 }
 
 void rwlock_release_readlock(rwlock_t *rw) {
+  sem_wait(&rw->lock);
+  int count = --rw->rcount;
+
+  if (count == 0)
+    sem_post(&rw->writelock);
+  sem_post(&rw->lock);
 }
 
 void rwlock_acquire_writelock(rwlock_t *rw) {
+  sem_wait(&rw->writewaitlock);
+  sem_wait(&rw->writelock);
+  sem_post(&rw->writewaitlock);
 }
 
 void rwlock_release_writelock(rwlock_t *rw) {
+  sem_post(&rw->writelock);
 }
 
 //
@@ -38,9 +64,9 @@ rwlock_t lock;
 void *reader(void *arg) {
     int i;
     for (i = 0; i < loops; i++) {
-	rwlock_acquire_readlock(&lock);
-	printf("read %d\n", value);
-	rwlock_release_readlock(&lock);
+      rwlock_acquire_readlock(&lock);
+      printf("read %d\n", value);
+      rwlock_release_readlock(&lock);
     }
     return NULL;
 }
@@ -48,10 +74,10 @@ void *reader(void *arg) {
 void *writer(void *arg) {
     int i;
     for (i = 0; i < loops; i++) {
-	rwlock_acquire_writelock(&lock);
-	value++;
-	printf("write %d\n", value);
-	rwlock_release_writelock(&lock);
+      rwlock_acquire_writelock(&lock);
+      value++;
+      printf("write %d\n", value);
+      rwlock_release_writelock(&lock);
     }
     return NULL;
 }
